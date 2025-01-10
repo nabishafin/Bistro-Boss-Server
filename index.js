@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const app = express();
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -29,6 +30,18 @@ async function run() {
         const cartsDB = client.db("bistroDb").collection("carts");
         const usersDB = client.db("bistroDb").collection("users");
 
+
+        // jwt releted Api
+        app.post('/jwt', (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SCERET, {
+                expiresIn: '1h'
+            });
+            res.send({ token })
+
+        })
+
+
         // get all menu data
         app.get('/menu', async (req, res) => {
             const result = await bistroDB.find().toArray();
@@ -49,8 +62,10 @@ async function run() {
             res.send(result)
         })
 
-        // post all cart by click add to cart in post methodes
 
+
+        // dashboard
+        // post all cart by click add to cart in post methodes
         app.post('/carts', async (req, res) => {
             const cartItem = req.body
             const result = await cartsDB.insertOne(cartItem)
@@ -60,7 +75,6 @@ async function run() {
         // delte cartItem
         app.delete("/carts/:id", async (req, res) => {
             const id = req.params.id;
-            console.log(id)
             const query = { _id: new ObjectId(id) };
             const result = await cartsDB.deleteOne(query);
             res.send(result);
@@ -68,31 +82,61 @@ async function run() {
 
         // user collection by post methods
         app.post('/users', async (req, res) => {
-            try {
-                const user = req.body;
-
-                // Check if email is provided
-                if (!user.email) {
-                    return res.status(400).send({ message: 'Email is required' });
-                }
-
-                const query = { email: user.email };
-                const existingUser = await usersDB.findOne(query);
-
-                if (existingUser) {
-                    return res.status(409).send({ message: 'User already exists' }); // HTTP 409 for conflict
-                }
-
-                const result = await usersDB.insertOne(user);
-                res.status(201).send({ message: 'User created successfully', result });
-            } catch (error) {
-                console.error('Error inserting user:', error);
-                res.status(500).send({ message: 'Internal server error' });
+            const user = req.body;
+            const query = { email: user.email }
+            const existingUser = await usersDB.findOne(query)
+            if (existingUser) {
+                return res.send({ message: 'user alredy exitets' })
             }
+            const result = usersDB.insertOne(user)
+            res.send(result)
         })
 
+        //    middleware 
+        const verifyToken = (req, res, next) => {
+            console.log('inside verify token', req.headers.authorization)
+            if (!req.headers.authorization) {
+                return res.send(401).send({ message: 'forBidden access' })
+            }
+            const token = req.headers.authorization.split(' ')[1]
+            jwt.verify(token, process.env.ACCESS_TOKEN_SCERET, (err, decoded) => {
+                if (err) {
+                    return res.send(401).send({ message: 'forBidden access' })
+                }
+                req.decoded = decoded;
+                next()
+            })
+            // next()
+        }
 
 
+        // get all user 
+        app.get('/users', verifyToken, async (req, res) => {
+
+            const result = await usersDB.find().toArray();
+            res.send(result)
+        })
+
+        // delet User
+        app.delete("/users/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await usersDB.deleteOne(query);
+            res.send(result);
+        });
+
+        // admin role
+        app.patch("/users/admin/:id", async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    role: 'admin'
+                }
+            }
+            const result = await usersDB.updateOne(filter, updatedDoc)
+            res.send(result)
+        })
 
 
         await client.db("admin").command({ ping: 1 });
