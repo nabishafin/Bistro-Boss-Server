@@ -94,14 +94,13 @@ async function run() {
 
         //    middleware 
         const verifyToken = (req, res, next) => {
-            console.log('inside verify token', req.headers.authorization)
             if (!req.headers.authorization) {
-                return res.send(401).send({ message: 'forBidden access' })
+                return res.send(401).send({ message: 'unauthorized Access' })
             }
             const token = req.headers.authorization.split(' ')[1]
             jwt.verify(token, process.env.ACCESS_TOKEN_SCERET, (err, decoded) => {
                 if (err) {
-                    return res.send(401).send({ message: 'forBidden access' })
+                    return res.send(401).send({ message: 'unauthorized Access' })
                 }
                 req.decoded = decoded;
                 next()
@@ -109,16 +108,45 @@ async function run() {
             // next()
         }
 
+        // admin varify
+        const vaifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email
+            const query = { email: email }
+            const user = await usersDB.findOne(query);
+
+            const isAdmin = user?.role === 'admin'
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'forBidden access' })
+            }
+            next()
+        }
+
+
+        // admin Role
+        app.get('/users/admin/:email', verifyToken, async (req, res) => {
+            const email = req.params.email
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ message: 'forBidden access' })
+            }
+            const query = { email: email }
+            const user = await usersDB.findOne(query);
+            let admin = false;
+            if (user) {
+                admin = user?.role === 'admin';
+            }
+            res.send({ admin })
+
+        })
 
         // get all user 
-        app.get('/users', verifyToken, async (req, res) => {
-
+        app.get('/users', verifyToken, vaifyAdmin, async (req, res) => {
             const result = await usersDB.find().toArray();
             res.send(result)
         })
 
+
         // delet User
-        app.delete("/users/:id", async (req, res) => {
+        app.delete("/users/:id", verifyToken, vaifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await usersDB.deleteOne(query);
