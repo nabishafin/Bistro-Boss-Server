@@ -48,6 +48,14 @@ async function run() {
             res.send(result)
         })
 
+        // post menu
+        app.post('/menus', async (req, res) => {
+            const menu = req.body;
+            const result = await bistroDB.insertOne(menu);
+            res.send(result)
+        })
+
+
         // get all reviews data
         app.get('/reviews', async (req, res) => {
             const result = await reviewsDB.find().toArray();
@@ -95,31 +103,32 @@ async function run() {
         //    middleware 
         const verifyToken = (req, res, next) => {
             if (!req.headers.authorization) {
-                return res.send(401).send({ message: 'unauthorized Access' })
+                return res.status(401).send({ message: 'Unauthorized Access' });
             }
-            const token = req.headers.authorization.split(' ')[1]
+            const token = req.headers.authorization.split(' ')[1];
             jwt.verify(token, process.env.ACCESS_TOKEN_SCERET, (err, decoded) => {
                 if (err) {
-                    return res.send(401).send({ message: 'unauthorized Access' })
+                    return res.status(401).send({ message: 'Unauthorized Access' });
                 }
                 req.decoded = decoded;
-                next()
-            })
-            // next()
+                next();
+            });
         }
 
-        // admin varify
+        // Admin verification middleware
         const vaifyAdmin = async (req, res, next) => {
-            const email = req.decoded.email
-            const query = { email: email }
+            const email = req.decoded.email;
+            const query = { email: email };
             const user = await usersDB.findOne(query);
-
-            const isAdmin = user?.role === 'admin'
+            const isAdmin = user?.role === 'admin';
             if (!isAdmin) {
-                return res.status(403).send({ message: 'forBidden access' })
+                return res.status(403).send({ message: 'Forbidden access' });
             }
-            next()
+            next();
         }
+
+        // Example route that uses the middlewares
+
 
 
         // admin Role
